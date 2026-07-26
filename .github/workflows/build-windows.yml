@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     # Todo el job corre DENTRO de la imagen Docker oficial de LibreWolf para
     # Windows (así lo hace el propio CI de LibreWolf/bsys6). Esta imagen ya
-    # trae todas las herramientas de cross-compilación necesarias.
+    # trae todas las herramientas de cross-compilación necesarias en /root/.mozbuild.
     container:
       image: codeberg.org/librewolf/bsys6:windows
     timeout-minutes: 360
@@ -49,11 +49,19 @@ jobs:
         # lo dejamos explícito por seguridad. Excluimos msix y nupkg (esos
         # son para Microsoft Store / Chocolatey, no los necesitas para uso
         # personal) y nos quedamos con setup (instalador .exe) y portable.
+        #
+        # GitHub Actions fuerza HOME=/github/home dentro de contenedores y
+        # no permite sobreescribirlo vía container.env (bug conocido de
+        # actions/runner). El toolchain de Windows (MSVC/wine/etc) que trae
+        # la imagen está instalado en /root/.mozbuild, así que exportamos
+        # HOME=/root manualmente al inicio de este paso para que el build
+        # lo encuentre ahí.
         env:
           TARGET: windows
           ARCH: x86_64
           SOURCE_TAR: ${{ steps.tarball.outputs.path }}
         run: |
+          export HOME=/root
           cd /bsys6-repo
           ./bsys6 package setup portable
 

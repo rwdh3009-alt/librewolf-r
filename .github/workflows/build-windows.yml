@@ -65,6 +65,12 @@ jobs:
           find /home/runner/bsys6/src -type f
           echo "=== README actual del repo ==="
           cat /home/runner/bsys6/README.md
+          echo "=== contenido de build.sh (¿usa docker internamente?) ==="
+          cat /home/runner/bsys6/src/build.sh
+          echo "=== contenido de src/exports/vars.sh ==="
+          cat /home/runner/bsys6/src/exports/vars.sh
+          echo "=== ¿existe algún .gitlab-ci con pistas de comandos actuales? ==="
+          find /home/runner/bsys6 -iname "*.yml" -o -iname "*.yaml"
 
       # PASO TEMPORALMENTE DESACTIVADO mientras confirmamos el comando correcto
       # de bsys6 (bsys6_docker ya no existe en el repo actual).

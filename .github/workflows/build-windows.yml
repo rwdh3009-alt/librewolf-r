@@ -51,24 +51,32 @@ jobs:
       - name: Clonar bsys6 (sistema de build oficial de LibreWolf)
         run: |
           git clone https://codeberg.org/librewolf/bsys6.git /home/runner/bsys6
-          chmod +x /home/runner/bsys6/bsys6_docker /home/runner/bsys6/bsys6
+          echo "=== Listado completo de la raíz del clon ==="
           ls -la /home/runner/bsys6
+          echo "=== Búsqueda de cualquier archivo llamado bsys6* ==="
+          find /home/runner/bsys6 -iname "bsys6*"
+          echo "=== git log del clon (para confirmar que no quedó vacío/roto) ==="
+          cd /home/runner/bsys6 && git log --oneline -3
+          echo "=== ¿usa git lfs? ==="
+          cat /home/runner/bsys6/.gitattributes 2>&1 || echo "no hay .gitattributes"
 
       - name: Compilar LibreWolf para Windows con Docker
         # TARGET=windows le dice a bsys6 que haga cross-compile a Windows
         # desde este runner Linux. SOURCE_TAR usa TU tarball (con tus
         # overrides) en vez de descargar el oficial de GitLab.
+        # Usamos "bash bsys6_docker" en vez de "./bsys6_docker" para que
+        # funcione incluso si el archivo no tiene el bit de ejecución.
         env:
           TARGET: windows
           ARCH: x86_64
           SOURCE_TAR: ${{ steps.tarball.outputs.path }}
         run: |
           cd /home/runner/bsys6
-          ./bsys6_docker source
-          ./bsys6_docker build
-          ./bsys6_docker package
-          ./bsys6_docker portable
-          ./bsys6_docker setup
+          bash bsys6_docker source
+          bash bsys6_docker build
+          bash bsys6_docker package
+          bash bsys6_docker portable
+          bash bsys6_docker setup
 
       - name: Subir el instalador y la versión portable como artifacts
         uses: actions/upload-artifact@v4

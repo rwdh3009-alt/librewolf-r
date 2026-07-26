@@ -6,9 +6,12 @@ on:
 
 jobs:
   build-windows:
-    # Runner gratis de GitHub. El build es pesado, así que usamos el timeout
-    # máximo disponible en runners gratuitos (6 horas) para no cortarse a medias.
     runs-on: ubuntu-latest
+    # Todo el job corre DENTRO de la imagen Docker oficial de LibreWolf para
+    # Windows (así lo hace el propio CI de LibreWolf/bsys6). Esta imagen ya
+    # trae todas las herramientas de cross-compilación necesarias.
+    container:
+      image: codeberg.org/librewolf/bsys6:windows
     timeout-minutes: 360
 
     steps:
@@ -16,33 +19,21 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
-
-      - name: Liberar espacio en disco del runner
-        # Los runners de GitHub traen preinstalado software que no usamos
-        # (Android SDK, .NET, GHC, etc). Lo borramos para tener más espacio
-        # libre para la compilación, que necesita bastante disco.
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-          docker system prune -af || true
-          df -h
+          path: librewolf-r
 
       - name: Instalar dependencias para generar el source tarball
         run: |
-          sudo apt-get update
-          sudo apt-get install -y make wget curl python3 rsync
+          apt-get update
+          apt-get install -y make wget curl python3 rsync gnupg
 
       - name: Generar el source tarball de tu fork (make all)
-        # Esto aplica todos los patches + tu librewolf-r.cfg + el LTO,
-        # y produce librewolf-<version>-<release>.source.tar.gz
+        working-directory: librewolf-r
         run: |
           make all
 
       - name: Ubicar el tarball generado
         id: tarball
+        working-directory: librewolf-r
         run: |
           TARBALL=$(ls librewolf-*.source.tar.gz | head -n1)
           echo "path=$(pwd)/$TARBALL" >> "$GITHUB_OUTPUT"
@@ -50,53 +41,32 @@ jobs:
 
       - name: Clonar bsys6 (sistema de build oficial de LibreWolf)
         run: |
-          git clone https://codeberg.org/librewolf/bsys6.git /home/runner/bsys6
-          echo "=== Listado completo de la raíz del clon ==="
-          ls -la /home/runner/bsys6
-          echo "=== Búsqueda de cualquier archivo llamado bsys6* ==="
-          find /home/runner/bsys6 -iname "bsys6*"
-          echo "=== git log del clon (para confirmar que no quedó vacío/roto) ==="
-          cd /home/runner/bsys6 && git log --oneline -3
-          echo "=== ¿usa git lfs? ==="
-          cat /home/runner/bsys6/.gitattributes 2>&1 || echo "no hay .gitattributes"
-          echo "=== Contenido completo del script bsys6 (sin sufijo) ==="
-          cat /home/runner/bsys6/bsys6
-          echo "=== Contenido de src/ para ver comandos disponibles ==="
-          find /home/runner/bsys6/src -type f
-          echo "=== README actual del repo ==="
-          cat /home/runner/bsys6/README.md
-          echo "=== contenido de build.sh (¿usa docker internamente?) ==="
-          cat /home/runner/bsys6/src/build.sh
-          echo "=== contenido de src/exports/vars.sh ==="
-          cat /home/runner/bsys6/src/exports/vars.sh
-          echo "=== ¿existe algún .gitlab-ci con pistas de comandos actuales? ==="
-          find /home/runner/bsys6 -iname "*.yml" -o -iname "*.yaml"
-          echo "=== contenido de build-image.yml (cómo usan Docker en su propio CI) ==="
-          cat /home/runner/bsys6/.forgejo/workflows/build-image.yml
-          echo "=== contenido de build-release.yml (cómo usan Docker en su propio CI) ==="
-          cat /home/runner/bsys6/.forgejo/workflows/build-release.yml
+          git clone https://codeberg.org/librewolf/bsys6.git /bsys6-repo
 
-      # PASO TEMPORALMENTE DESACTIVADO mientras confirmamos el comando correcto
-      # de bsys6 (bsys6_docker ya no existe en el repo actual).
-      # - name: Compilar LibreWolf para Windows con Docker
-      #   env:
-      #     TARGET: windows
-      #     ARCH: x86_64
-      #     SOURCE_TAR: ${{ steps.tarball.outputs.path }}
-      #   run: |
-      #     cd /home/runner/bsys6
-      #     bash bsys6_docker source
-      #     bash bsys6_docker build
-      #     bash bsys6_docker package
-      #     bash bsys6_docker portable
-      #     bash bsys6_docker setup
+      - name: Compilar LibreWolf para Windows
+        # SOURCE_TAR usa TU tarball (con tus overrides) en vez de descargar
+        # el oficial. TARGET=windows ya viene implícito por la imagen, pero
+        # lo dejamos explícito por seguridad. Excluimos msix y nupkg (esos
+        # son para Microsoft Store / Chocolatey, no los necesitas para uso
+        # personal) y nos quedamos con setup (instalador .exe) y portable.
+        env:
+          TARGET: windows
+          ARCH: x86_64
+          SOURCE_TAR: ${{ steps.tarball.outputs.path }}
+        run: |
+          cd /bsys6-repo
+          ./bsys6 package setup portable
+
+      - name: Ubicar los artifacts generados
+        run: |
+          echo "=== Buscando archivos .exe y .zip generados ==="
+          find /bsys6-repo -maxdepth 2 \( -iname "*.exe" -o -iname "*.zip" \) -exec ls -la {} \;
 
       - name: Subir el instalador y la versión portable como artifacts
-        if: false
         uses: actions/upload-artifact@v4
         with:
           name: librewolf-r-windows
           path: |
-            /home/runner/bsys6/*.exe
-            /home/runner/bsys6/*.zip
+            /bsys6-repo/*.exe
+            /bsys6-repo/*.zip
           retention-days: 14

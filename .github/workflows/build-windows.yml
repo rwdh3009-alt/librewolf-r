@@ -71,6 +71,10 @@ jobs:
           cat /home/runner/bsys6/src/exports/vars.sh
           echo "=== ¿existe algún .gitlab-ci con pistas de comandos actuales? ==="
           find /home/runner/bsys6 -iname "*.yml" -o -iname "*.yaml"
+          echo "=== contenido de build-image.yml (cómo usan Docker en su propio CI) ==="
+          cat /home/runner/bsys6/.forgejo/workflows/build-image.yml
+          echo "=== contenido de build-release.yml (cómo usan Docker en su propio CI) ==="
+          cat /home/runner/bsys6/.forgejo/workflows/build-release.yml
 
       # PASO TEMPORALMENTE DESACTIVADO mientras confirmamos el comando correcto
       # de bsys6 (bsys6_docker ya no existe en el repo actual).

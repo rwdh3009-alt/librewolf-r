@@ -1,0 +1,78 @@
+name: Build LibreWolf for Windows
+
+# Se corre manualmente desde la pestaña "Actions" de GitHub, botón "Run workflow".
+on:
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    # Runner gratis de GitHub. El build es pesado, así que usamos el timeout
+    # máximo disponible en runners gratuitos (6 horas) para no cortarse a medias.
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout de tu fork (con submódulos)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Liberar espacio en disco del runner
+        # Los runners de GitHub traen preinstalado software que no usamos
+        # (Android SDK, .NET, GHC, etc). Lo borramos para tener más espacio
+        # libre para la compilación, que necesita bastante disco.
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          docker system prune -af || true
+          df -h
+
+      - name: Instalar dependencias para generar el source tarball
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y make wget curl python3 rsync
+
+      - name: Generar el source tarball de tu fork (make all)
+        # Esto aplica todos los patches + tu librewolf-r.cfg + el LTO,
+        # y produce librewolf-<version>-<release>.source.tar.gz
+        run: |
+          make all
+
+      - name: Ubicar el tarball generado
+        id: tarball
+        run: |
+          TARBALL=$(ls librewolf-*.source.tar.gz | head -n1)
+          echo "path=$(pwd)/$TARBALL" >> "$GITHUB_OUTPUT"
+          echo "Tarball generado: $TARBALL"
+
+      - name: Clonar bsys6 (sistema de build oficial de LibreWolf)
+        run: |
+          git clone https://codeberg.org/librewolf/bsys6.git /home/runner/bsys6
+
+      - name: Compilar LibreWolf para Windows con Docker
+        # TARGET=windows le dice a bsys6 que haga cross-compile a Windows
+        # desde este runner Linux. SOURCE_TAR usa TU tarball (con tus
+        # overrides) en vez de descargar el oficial de GitLab.
+        env:
+          TARGET: windows
+          ARCH: x86_64
+          SOURCE_TAR: ${{ steps.tarball.outputs.path }}
+        run: |
+          cd /home/runner/bsys6
+          ./bsys6_docker source
+          ./bsys6_docker build
+          ./bsys6_docker package
+          ./bsys6_docker portable
+          ./bsys6_docker setup
+
+      - name: Subir el instalador y la versión portable como artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: librewolf-r-windows
+          path: |
+            /home/runner/bsys6/*.exe
+            /home/runner/bsys6/*.zip
+          retention-days: 14

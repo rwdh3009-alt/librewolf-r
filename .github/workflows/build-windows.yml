@@ -59,26 +59,30 @@ jobs:
           cd /home/runner/bsys6 && git log --oneline -3
           echo "=== ¿usa git lfs? ==="
           cat /home/runner/bsys6/.gitattributes 2>&1 || echo "no hay .gitattributes"
+          echo "=== Contenido completo del script bsys6 (sin sufijo) ==="
+          cat /home/runner/bsys6/bsys6
+          echo "=== Contenido de src/ para ver comandos disponibles ==="
+          find /home/runner/bsys6/src -type f
+          echo "=== README actual del repo ==="
+          cat /home/runner/bsys6/README.md
 
-      - name: Compilar LibreWolf para Windows con Docker
-        # TARGET=windows le dice a bsys6 que haga cross-compile a Windows
-        # desde este runner Linux. SOURCE_TAR usa TU tarball (con tus
-        # overrides) en vez de descargar el oficial de GitLab.
-        # Usamos "bash bsys6_docker" en vez de "./bsys6_docker" para que
-        # funcione incluso si el archivo no tiene el bit de ejecución.
-        env:
-          TARGET: windows
-          ARCH: x86_64
-          SOURCE_TAR: ${{ steps.tarball.outputs.path }}
-        run: |
-          cd /home/runner/bsys6
-          bash bsys6_docker source
-          bash bsys6_docker build
-          bash bsys6_docker package
-          bash bsys6_docker portable
-          bash bsys6_docker setup
+      # PASO TEMPORALMENTE DESACTIVADO mientras confirmamos el comando correcto
+      # de bsys6 (bsys6_docker ya no existe en el repo actual).
+      # - name: Compilar LibreWolf para Windows con Docker
+      #   env:
+      #     TARGET: windows
+      #     ARCH: x86_64
+      #     SOURCE_TAR: ${{ steps.tarball.outputs.path }}
+      #   run: |
+      #     cd /home/runner/bsys6
+      #     bash bsys6_docker source
+      #     bash bsys6_docker build
+      #     bash bsys6_docker package
+      #     bash bsys6_docker portable
+      #     bash bsys6_docker setup
 
       - name: Subir el instalador y la versión portable como artifacts
+        if: false
         uses: actions/upload-artifact@v4
         with:
           name: librewolf-r-windows

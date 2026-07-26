@@ -62,6 +62,7 @@ jobs:
           SOURCE_TAR: ${{ steps.tarball.outputs.path }}
         run: |
           export HOME=/root
+          export MOZ_PARALLEL_BUILD=2
           cd /bsys6-repo
           ./bsys6 package setup portable
 

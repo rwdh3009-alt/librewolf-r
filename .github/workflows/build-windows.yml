@@ -51,6 +51,8 @@ jobs:
       - name: Clonar bsys6 (sistema de build oficial de LibreWolf)
         run: |
           git clone https://codeberg.org/librewolf/bsys6.git /home/runner/bsys6
+          chmod +x /home/runner/bsys6/bsys6_docker /home/runner/bsys6/bsys6
+          ls -la /home/runner/bsys6
 
       - name: Compilar LibreWolf para Windows con Docker
         # TARGET=windows le dice a bsys6 que haga cross-compile a Windows

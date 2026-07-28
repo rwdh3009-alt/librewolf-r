@@ -12,7 +12,13 @@ jobs:
     # trae todas las herramientas de cross-compilación necesarias en /root/.mozbuild.
     container:
       image: codeberg.org/librewolf/bsys6:windows
-    timeout-minutes: 360
+      # Montamos /bsys6-repo como volumen persistente en TU disco (no en el
+      # contenedor efímero). Así, si el build falla a mitad de camino (ej.
+      # en el linkeo final tras horas de compilar), la siguiente corrida
+      # retoma desde ahí en vez de recompilar todo desde cero.
+      volumes:
+        - /home/pouchan/librewolf-build-cache:/bsys6-repo
+    timeout-minutes: 480
 
     steps:
       - name: Checkout de tu fork (con submódulos)
@@ -39,9 +45,16 @@ jobs:
           echo "path=$(pwd)/$TARBALL" >> "$GITHUB_OUTPUT"
           echo "Tarball generado: $TARBALL"
 
-      - name: Clonar bsys6 (sistema de build oficial de LibreWolf)
+      - name: Clonar o actualizar bsys6 (persiste entre corridas)
         run: |
-          git clone https://codeberg.org/librewolf/bsys6.git /bsys6-repo
+          if [ -d /bsys6-repo/.git ]; then
+            echo "bsys6 ya existe en caché, actualizando..."
+            cd /bsys6-repo
+            git pull
+          else
+            echo "Primera vez, clonando bsys6..."
+            git clone https://codeberg.org/librewolf/bsys6.git /bsys6-repo
+          fi
 
       - name: Compilar LibreWolf para Windows
         # SOURCE_TAR usa TU tarball (con tus overrides) en vez de descargar
@@ -56,15 +69,32 @@ jobs:
         # la imagen está instalado en /root/.mozbuild, así que exportamos
         # HOME=/root manualmente al inicio de este paso para que el build
         # lo encuentre ahí.
+        #
+        # MOZ_PARALLEL_BUILD=1: con 12GB RAM reales, evitamos que se
+        # solapen varios procesos pesados de compilación a la vez.
         env:
           TARGET: windows
           ARCH: x86_64
           SOURCE_TAR: ${{ steps.tarball.outputs.path }}
         run: |
           export HOME=/root
-          export MOZ_PARALLEL_BUILD=2
+          export MOZ_PARALLEL_BUILD=1
           cd /bsys6-repo
+          echo "=== Disco ANTES ==="
+          df -h /
+          echo "=== RAM ANTES ==="
+          free -h
+          ( while true; do
+              echo "[$(date +%H:%M:%S)] DISK: $(df -h / | tail -1) | RAM: $(free -h | awk '/^Mem:/{print $3"/"$2" used, "$7" avail"}')"
+              sleep 60
+            done ) &
+          MONITOR_PID=$!
           ./bsys6 package setup portable
+          kill $MONITOR_PID 2>/dev/null || true
+          echo "=== Disco DESPUÉS ==="
+          df -h /
+          echo "=== RAM DESPUÉS ==="
+          free -h
 
       - name: Ubicar los artifacts generados
         run: |

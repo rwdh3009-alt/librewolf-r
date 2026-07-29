@@ -59,9 +59,7 @@ jobs:
       - name: Compilar LibreWolf para Windows
         # SOURCE_TAR usa TU tarball (con tus overrides) en vez de descargar
         # el oficial. TARGET=windows ya viene implícito por la imagen, pero
-        # lo dejamos explícito por seguridad. Excluimos msix y nupkg (esos
-        # son para Microsoft Store / Chocolatey, no los necesitas para uso
-        # personal) y nos quedamos con setup (instalador .exe) y portable.
+        # lo dejamos explícito por seguridad.
         #
         # GitHub Actions fuerza HOME=/github/home dentro de contenedores y
         # no permite sobreescribirlo vía container.env (bug conocido de
@@ -72,6 +70,9 @@ jobs:
         #
         # MOZ_PARALLEL_BUILD=1: con 12GB RAM reales, evitamos que se
         # solapen varios procesos pesados de compilación a la vez.
+        #
+        # Usamos /proc/meminfo en vez de "free -h" porque esta imagen
+        # Docker no trae instalado el paquete procps.
         env:
           TARGET: windows
           ARCH: x86_64
@@ -83,9 +84,10 @@ jobs:
           echo "=== Disco ANTES ==="
           df -h /
           echo "=== RAM ANTES ==="
-          free -h
+          cat /proc/meminfo | grep -E "MemTotal|MemAvailable"
           ( while true; do
-              echo "[$(date +%H:%M:%S)] DISK: $(df -h / | tail -1) | RAM: $(free -h | awk '/^Mem:/{print $3"/"$2" used, "$7" avail"}')"
+              MEM=$(awk '/MemTotal/{t=$2} /MemAvailable/{a=$2} END{printf "%.1fG total, %.1fG avail", t/1024/1024, a/1024/1024}' /proc/meminfo)
+              echo "[$(date +%H:%M:%S)] DISK: $(df -h / | tail -1) | RAM: $MEM"
               sleep 60
             done ) &
           MONITOR_PID=$!
@@ -94,7 +96,7 @@ jobs:
           echo "=== Disco DESPUÉS ==="
           df -h /
           echo "=== RAM DESPUÉS ==="
-          free -h
+          cat /proc/meminfo | grep -E "MemTotal|MemAvailable"
 
       - name: Ubicar los artifacts generados
         run: |
